@@ -1,101 +1,57 @@
-Alright sir ✅ — here is the **full, self‑contained, final, ZIP‑ready Spring Batch Maven project** implementing the **priority‑aware, parallel, chunked, retry‑enabled, resource‑adaptive** processor **exactly like your original custom Java code but inside Spring Batch** — with **ultra‑detailed, line‑by‑line comments right next to each line** so you can port it directly into a PDF as both a runnable project and a training document.  
+--> pom.xml
 
-No references to earlier messages — everything is here in one answer.  
+<?xml version="1.0" encoding="UTF-8"?> <!-- XML document declaration -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"  <!-- Declare Maven POM XML namespace -->
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  <!-- XML schema instance namespace -->
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0  <!-- POM schema location -->
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd"> <!-- Link to schema file -->
 
-***
+    <modelVersion>4.0.0</modelVersion> <!-- Maven model version -->
 
-# 📂 Project Folder Structure
-```
-spring-batch-priority-processing/
-├── pom.xml
-├── src
-│   ├── main
-│   │   ├── java
-│   │   │   └── com
-│   │   │       └── example
-│   │   │           ├── BatchApplication.java
-│   │   │           ├── config
-│   │   │           │   ├── BatchConfig.java
-│   │   │           │   └── PriorityFilePartitioner.java
-│   │   │           ├── executor
-│   │   │           │   └── AdaptiveThreadPoolTaskExecutor.java
-│   │   │           ├── monitor
-│   │   │           │   └── ResourceMonitor.java
-│   │   │           ├── listener
-│   │   │           │   └── JobCompletionNotificationListener.java
-│   │   │           ├── model
-│   │   │           │   └── MyRecord.java
-│   │   │           ├── processor
-│   │   │           │   └── MyProcessor.java
-│   │   │           ├── reader
-│   │   │           │   └── MyFieldSetMapper.java
-│   │   │           └── writer
-│   │   │               └── MyWriter.java
-│   │   └── resources
-│   │       ├── application.properties
-│   │       └── input
-│   │           ├── file-priority_1.csv
-│   │           └── file-priority_2.csv
-```
+    <groupId>com.example</groupId> <!-- Maven group (company/project) -->
+    <artifactId>spring-batch-priority-processing</artifactId> <!-- Project artifact id -->
+    <version>1.0.0</version> <!-- Project version -->
+    <packaging>jar</packaging> <!-- Output as JAR -->
+    <name>Spring Batch Priority Processing</name> <!-- Human-readable name -->
 
-***
+    <properties>
+        <java.version>17</java.version> <!-- Compile using Java 17 -->
+        <spring.boot.version>2.7.18</spring.boot.version> <!-- Spring Boot version -->
+    </properties>
 
-## **pom.xml**
-```xml
- 
+    <dependencies>
+        <dependency> <!-- Spring Batch core with Boot auto-config -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-batch</artifactId>
+        </dependency>
+        <dependency> <!-- JDBC for job repository metadata storage -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency> <!-- Retry/backoff utilities -->
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency> <!-- In-memory H2 DB used for job metadata -->
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
 
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0  
-                             https://maven.apache.org/xsd/maven-4.0.0.xsd"> 
+    <build>
+        <plugins>
+            <plugin> <!-- Enables mvn spring-boot:run and packaging as bootable JAR -->
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
 
-    4.0.0 
 
-    com.example 
-    spring-batch-priority-processing 
-    1.0.0 
-    jar 
-    Spring Batch Priority Processing 
+--> BatchApplication.java
 
-    
-        17 
-        2.7.18 
-    
-
-    
-         
-            org.springframework.boot
-            spring-boot-starter-batch
-        
-         
-            org.springframework.boot
-            spring-boot-starter-jdbc
-        
-         
-            org.springframework.retry
-            spring-retry
-        
-         
-            com.h2database
-            h2
-            runtime
-        
-    
-
-    
-        
-             
-                org.springframework.boot
-                spring-boot-maven-plugin
-            
-        
-    
-
-```
-
-***
-
-## **BatchApplication.java**
-```java
 package com.example; // Declare package for main application class
 
 import org.springframework.boot.SpringApplication; // Import Spring Boot launcher
@@ -107,12 +63,9 @@ public class BatchApplication { // Main application class
         SpringApplication.run(BatchApplication.class, args); // Launch Spring Boot (which also launches Spring Batch job)
     }
 }
-```
 
-***
+--> executor/AdaptiveThreadPoolTaskExecutor.java
 
-## **executor/AdaptiveThreadPoolTaskExecutor.java**
-```java
 package com.example.executor; // Package for executor classes
 
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor; // Import Spring's thread pool executor
@@ -129,12 +82,10 @@ public class AdaptiveThreadPoolTaskExecutor extends ThreadPoolTaskExecutor { // 
         setMaxPoolSize(newMaxSize);   // Update max size
     }
 }
-```
 
-***
 
-## **monitor/ResourceMonitor.java**
-```java
+--> monitor/ResourceMonitor.java
+
 package com.example.monitor; // Package for monitoring classes
 
 import com.example.executor.AdaptiveThreadPoolTaskExecutor; // Import our adaptive executor
@@ -177,7 +128,10 @@ public class ResourceMonitor {
                     long maxMem = memBean.getHeapMemoryUsage().getMax(); // Max heap
                     double memUsage = (double) usedMem / maxMem; // Usage ratio
 
-                    if (cpuLoad  0.8 || memUsage > 0.9) { // Heavy load
+                    if (cpuLoad < 0.5 && memUsage < 0.7) { // Plenty of resources
+                        executor.adjustPoolSizes(6, 12); // Scale up threads
+                        dynamicChunkSize.set(200); // Bigger chunks
+                    } else if (cpuLoad > 0.8 || memUsage > 0.9) { // Heavy load
                         executor.adjustPoolSizes(2, 4); // Scale down threads
                         dynamicChunkSize.set(50); // Smaller chunks
                     } else { // Moderate load
@@ -199,12 +153,11 @@ public class ResourceMonitor {
         return dynamicChunkSize.get();
     }
 }
-```
 
-***
 
-## **config/BatchConfig.java**
-```java
+--> config/BatchConfig.java
+
+
 package com.example.config; // Batch configuration package
 
 import com.example.executor.AdaptiveThreadPoolTaskExecutor; // Adaptive executor
@@ -273,9 +226,9 @@ public class BatchConfig {
     }
 
     @Bean // Worker step bean
-    public Step workerStep(FlatFileItemReader reader, MyProcessor processor, MyWriter writer) {
+    public Step workerStep(FlatFileItemReader<MyRecord> reader, MyProcessor processor, MyWriter writer) {
         return stepBuilderFactory.get("workerStep")
-                .chunk(resourceMonitor.getDynamicChunkSize()) // Dynamic chunk size
+                .<MyRecord, MyRecord>chunk(resourceMonitor.getDynamicChunkSize()) // Dynamic chunk size
                 .reader(reader) // Reader
                 .processor(processor) // Processor
                 .writer(writer) // Writer
@@ -302,8 +255,8 @@ public class BatchConfig {
 
     @Bean // Reader bean
     @StepScope // Each step has its own instance
-    public FlatFileItemReader itemReader(@Value("#{stepExecutionContext['fileName']}") String fileName) {
-        FlatFileItemReader reader = new FlatFileItemReader<>(); // Create reader
+    public FlatFileItemReader<MyRecord> itemReader(@Value("#{stepExecutionContext['fileName']}") String fileName) {
+        FlatFileItemReader<MyRecord> reader = new FlatFileItemReader<>(); // Create reader
         reader.setResource(new FileSystemResource(fileName)); // Bind to file from context
         reader.setLineMapper(new DefaultLineMapper<>() {{ // Map line to object
             setLineTokenizer(new DelimitedLineTokenizer(",") {{ // Tokenize CSV
@@ -314,12 +267,10 @@ public class BatchConfig {
         return reader;
     }
 }
-```
 
-***
 
-## **config/PriorityFilePartitioner.java**
-```java
+--> config/PriorityFilePartitioner.java
+
 package com.example.config; // Package
 
 import org.springframework.batch.core.partition.support.Partitioner; // Interface
@@ -338,12 +289,12 @@ public class PriorityFilePartitioner implements Partitioner {
     }
 
     @Override
-    public Map partition(int gridSize) {
-        Map partitions = new HashMap<>(); // Map partitions
+    public Map<String, ExecutionContext> partition(int gridSize) {
+        Map<String, ExecutionContext> partitions = new HashMap<>(); // Map partitions
         File[] files = new File(inputDir).listFiles(); // All files
         if (files == null) throw new IllegalStateException("No files found"); // Guard
 
-        List sortedFiles = Arrays.stream(files)
+        List<File> sortedFiles = Arrays.stream(files)
                 .sorted(Comparator.comparingInt(this::extractPriority)) // Sort by priority
                 .collect(Collectors.toList());
 
@@ -369,12 +320,11 @@ public class PriorityFilePartitioner implements Partitioner {
         return Integer.MAX_VALUE; // Default (lowest priority)
     }
 }
-```
 
-***
 
-## **listener/JobCompletionNotificationListener.java**
-```java
+--> listener/JobCompletionNotificationListener.java
+
+
 package com.example.listener; // Package
 
 import org.springframework.batch.core.JobExecution; // Job execution metadata
@@ -388,12 +338,10 @@ public class JobCompletionNotificationListener extends JobExecutionListenerSuppo
         System.out.println("=== JOB FINISHED with status: " + jobExecution.getStatus() + " ===");
     }
 }
-```
 
-***
 
-## **model/MyRecord.java**
-```java
+--> model/MyRecord.java
+
 package com.example.model; // Package
 
 public class MyRecord {
@@ -417,19 +365,16 @@ public class MyRecord {
                 '}';
     }
 }
-```
 
-***
+--> reader/MyFieldSetMapper.java
 
-## **reader/MyFieldSetMapper.java**
-```java
 package com.example.reader; // Package
 
 import com.example.model.MyRecord; // Model
 import org.springframework.batch.item.file.mapping.FieldSetMapper; // Mapper API
 import org.springframework.batch.item.file.transform.FieldSet; // FieldSet
 
-public class MyFieldSetMapper implements FieldSetMapper {
+public class MyFieldSetMapper implements FieldSetMapper<MyRecord> {
     @Override
     public MyRecord mapFieldSet(FieldSet fieldSet) { // Convert FieldSet to object
         MyRecord record = new MyRecord();
@@ -439,77 +384,49 @@ public class MyFieldSetMapper implements FieldSetMapper {
         return record;
     }
 }
-```
 
-***
 
-## **processor/MyProcessor.java**
-```java
+--> processor/MyProcessor.java
+
 package com.example.processor; // Package
 
 import com.example.model.MyRecord; // Model
 import org.springframework.batch.item.ItemProcessor; // Processor API
 
-public class MyProcessor implements ItemProcessor {
+public class MyProcessor implements ItemProcessor<MyRecord, MyRecord> {
     @Override
     public MyRecord process(MyRecord item) { // Process record
         return item; // No change
     }
 }
-```
 
-***
 
-## **writer/MyWriter.java**
-```java
+--> writer/MyWriter.java
+
 package com.example.writer; // Package
 
 import com.example.model.MyRecord; // Model
 import org.springframework.batch.item.ItemWriter; // Writer API
 import java.util.List; // List
 
-public class MyWriter implements ItemWriter {
+public class MyWriter implements ItemWriter<MyRecord> {
     @Override
-    public void write(List items) { // Write chunk
+    public void write(List<? extends MyRecord> items) { // Write chunk
         System.out.println("Writing chunk: " + items.size());
         for (MyRecord record : items) {
             System.out.println(record);
         }
     }
 }
-```
 
-***
 
-## **resources/application.properties**
-```properties
+--> resources/application.properties
+
+
 spring.batch.initialize-schema=always # Initialize metadata tables each run
 spring.main.allow-bean-definition-overriding=true # Allow bean overriding
 logging.level.org.springframework.batch=INFO # Batch logging
-```
 
-***
 
-## **resources/input/file-priority_1.csv**
-```csv
-field1,field2,field3
-A1,B1,C1
-A2,B2,C2
-```
 
-## **resources/input/file-priority_2.csv**
-```csv
-field1,field2,field3
-X1,Y1,Z1
-X2,Y2,Z2
-```
 
-***
-
-This **final code** is **ready-to-run** via:
-```bash
-mvn spring-boot:run
-```
-It **adapts to CPU/RAM** in real time, adjusts threads/chunks, processes by priority, and is fully commented for training.  
-
-Do you want me to also create a **diagram visualizing this adaptive workflow** so it slots straight into your PDF as the architecture diagram? That would complete the doc.
