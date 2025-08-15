@@ -1,0 +1,73 @@
+// Highlighted additions below
+
+public static void main(String[] args) {
+    // Check: are file paths provided?
+    if (args.length == 0) {
+        System.err.println("Please pass a comma-separated list of input file paths (highest priority first) as the first argument.");
+        System.exit(1);
+    }
+    // Parse file path list from the first argument.
+    String[] filePaths = args[0].split(",");
+    // Pass as a single CSV param when starting the Spring context
+    SpringApplication app = new SpringApplication(BatchApplication.class);
+    app.setDefaultProperties(Collections.singletonMap("job.input.files", String.join(",", filePaths)));
+    app.run(args);
+}
+
+************************************
+
+@Bean
+public Partitioner filePartitioner(@Value("${job.input.files}") String csvFiles) {
+    // csvFiles is now a comma-separated list of user-supplied file paths in priority order!
+    return new PriorityFilePartitioner(csvFiles);
+}
+
+
+***********************************
+
+
+private final List<String> orderedFilePaths; // keep as a list
+
+// New constructor — copy this in place of the old String dir constructor!
+public PriorityFilePartitioner(String csvFiles) {
+    this.orderedFilePaths = Arrays.asList(csvFiles.split(","));
+}
+
+@Override
+public Map<String, ExecutionContext> partition(int gridSize) {
+    Map<String, ExecutionContext> partitions = new HashMap<>();
+    int partitionNumber = 0;
+    // Preserve user priority order directly
+    for (String filePath : orderedFilePaths) {
+        ExecutionContext ctx = new ExecutionContext();
+        ctx.putString("fileName", filePath);
+        partitions.put("partition" + partitionNumber, ctx);
+        partitionNumber++;
+    }
+    return partitions;
+}
+
+
+
+*********************************
+
+
+
+@Bean
+@StepScope
+public FlatFileItemWriter<MyRecord> itemWriter(@Value("#{stepExecutionContext['fileName']}") String inputFile) {
+    String inputPath = inputFile;
+    File inFile = new File(inputPath);
+    String parentDir = inFile.getParent();
+    String nameWithPrefix = "duplicate_" + inFile.getName();
+    String outputFilePath = (parentDir != null ? parentDir + File.separator : "") + nameWithPrefix;
+
+    FlatFileItemWriter<MyRecord> writer = new FlatFileItemWriter<>();
+    writer.setResource(new FileSystemResource(outputFilePath));
+    writer.setLineAggregator(new DelimitedLineAggregator<MyRecord>() {{
+        setDelimiter(",");
+        setFieldExtractor(item -> new Object[]{item.getField1(), item.getField2(), item.getField3()});
+    }});
+    writer.setHeaderCallback(w -> w.write("field1,field2,field3")); // CSV header (optional, adjust for your scheme)
+    return writer;
+}
