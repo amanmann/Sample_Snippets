@@ -71,3 +71,40 @@ public FlatFileItemWriter<MyRecord> itemWriter(@Value("#{stepExecutionContext['f
     writer.setHeaderCallback(w -> w.write("field1,field2,field3")); // CSV header (optional, adjust for your scheme)
     return writer;
 }
+
+
+
+
+************************************************************************
+
+Yes—the order of records in each file **will be fully preserved** in the output file written by your `MyWriter`.
+
+### **Why?**
+- **Spring Batch always processes chunks as sequential batches of records.**
+- The `FlatFileItemReader` will read the file line by line (in order), and each chunk contains the next continuous “slice” of records.  
+- You only write records out (in append mode) in the same sequence you received them, so the written records in `duplicate_{filename}` will exactly match the original file’s line order.
+
+### **How is order preserved in the parallel solution?**
+- Each worker/partition processes exactly one file and writes to a single output file.
+- Within each file, chunks are processed and written in sequential order.
+- Even if two files are processed in parallel, there is **no interleaving across files** (you only ever write the records of one file to its own output, never mixing files).
+- **Your step-scoped writer means each file’s output is handled entirely independently, one file per step/partition.**
+
+### **Key Takeaway**
+
+- **Input file order → chunk order → write order = always preserved, no skipped, missing, or mis-ordered lines.**
+- You do NOT need extra logic to preserve record order for a single file, no matter your chunk size or thread pool configuration.[1][4]
+
+***
+
+**If you ever want to process records out-of-order (e.g., shuffle, sort differently, split one file among multiple partitions), you’d need explicit code for that.  
+But with your current structure, output is always in the same order as input, one file at a time.**
+
+[1] https://stackoverflow.com/questions/38780796/how-does-spring-batch-step-scope-work
+[2] https://docs.spring.io/spring-batch/docs/4.3.x/reference/html/step.html
+[3] https://docs.spring.io/spring-batch/docs/4.0.x/reference/html/step.html
+[4] https://hackernoon.com/using-component-and-stepscope-together-in-java-spring-batch
+[5] https://docs.spring.vmware.com/spring-batch/docs/5.0.7/reference/html/step.html
+[6] https://www.toptal.com/spring/spring-batch-tutorial
+[7] https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing/intercepting-execution.html
+[8] https://docs.spring.io/spring-batch/docs/4.1.x/reference/pdf/spring-batch-reference.pdf
