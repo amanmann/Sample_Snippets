@@ -213,17 +213,12 @@ If you get any error message or need to know the exact location for any snippet,
     <Console name="LogToConsole" target="SYSTEM_OUT">
       <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
     </Console>
-    <File name="LogToFile" fileName="logs/app.log">
-      <PatternLayout>
-        <Pattern>%d{HH:mm:ss.SSS} %-5p %c{1.} - %m%n</Pattern>
-      </PatternLayout>
-    </File>
   </Appenders>
   <Loggers>
     <Root level="info">
       <AppenderRef ref="LogToConsole"/>
-      <AppenderRef ref="LogToFile"/>
     </Root>
   </Loggers>
 </Configuration>
+
 
