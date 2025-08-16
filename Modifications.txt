@@ -77,34 +77,110 @@ public FlatFileItemWriter<MyRecord> itemWriter(@Value("#{stepExecutionContext['f
 
 ************************************************************************
 
-Yes—the order of records in each file **will be fully preserved** in the output file written by your `MyWriter`.
-
-### **Why?**
-- **Spring Batch always processes chunks as sequential batches of records.**
-- The `FlatFileItemReader` will read the file line by line (in order), and each chunk contains the next continuous “slice” of records.  
-- You only write records out (in append mode) in the same sequence you received them, so the written records in `duplicate_{filename}` will exactly match the original file’s line order.
-
-### **How is order preserved in the parallel solution?**
-- Each worker/partition processes exactly one file and writes to a single output file.
-- Within each file, chunks are processed and written in sequential order.
-- Even if two files are processed in parallel, there is **no interleaving across files** (you only ever write the records of one file to its own output, never mixing files).
-- **Your step-scoped writer means each file’s output is handled entirely independently, one file per step/partition.**
-
-### **Key Takeaway**
-
-- **Input file order → chunk order → write order = always preserved, no skipped, missing, or mis-ordered lines.**
-- You do NOT need extra logic to preserve record order for a single file, no matter your chunk size or thread pool configuration.[1][4]
+Absolutely—I’ll make this simple, clear, and "copy/paste ready."  
+Below are **exact file names**, **method names**, and **what exactly to add or replace** for enabling per-file output Writer in your Spring Batch adaptive project.
 
 ***
 
-**If you ever want to process records out-of-order (e.g., shuffle, sort differently, split one file among multiple partitions), you’d need explicit code for that.  
-But with your current structure, output is always in the same order as input, one file at a time.**
+## 1. File: `BatchConfig.java`
 
-[1] https://stackoverflow.com/questions/38780796/how-does-spring-batch-step-scope-work
-[2] https://docs.spring.io/spring-batch/docs/4.3.x/reference/html/step.html
-[3] https://docs.spring.io/spring-batch/docs/4.0.x/reference/html/step.html
-[4] https://hackernoon.com/using-component-and-stepscope-together-in-java-spring-batch
-[5] https://docs.spring.vmware.com/spring-batch/docs/5.0.7/reference/html/step.html
-[6] https://www.toptal.com/spring/spring-batch-tutorial
-[7] https://docs.spring.io/spring-batch/reference/step/chunk-oriented-processing/intercepting-execution.html
-[8] https://docs.spring.io/spring-batch/docs/4.1.x/reference/pdf/spring-batch-reference.pdf
+### (A) **Add this new bean in your configuration class:**
+```java
+// Add to: src/main/java/com/example/config/BatchConfig.java
+
+@Bean
+@StepScope
+public MyWriter myWriter(@Value("#{stepExecutionContext['fileName']}") String inputFilePath) {
+    return new MyWriter(inputFilePath);
+}
+```
+_Place this bean alongside your other `@Bean` definitions (e.g., after your reader or processor beans)._
+
+***
+
+### (B) **Update your `workerStep` method signature and argument to use the new writer:**
+#### **Before:**
+```java
+@Bean
+public Step workerStep(FlatFileItemReader reader, MyProcessor processor, MyWriter writer) {
+    return stepBuilderFactory.get("workerStep")
+            .chunk(...)
+            .reader(reader)
+            .processor(processor)
+            .writer(writer)
+            .build();
+}
+```
+#### **After:**
+```java
+@Bean
+public Step workerStep(FlatFileItemReader reader, MyProcessor processor, MyWriter myWriter) {
+    return stepBuilderFactory.get("workerStep")
+            .chunk(...)
+            .reader(reader)
+            .processor(processor)
+            .writer(myWriter)
+            .build();
+}
+```
+**Notice how the third parameter is now called `myWriter` to match the bean you just added above.**
+
+***
+
+## 2. File: `MyWriter.java`
+
+### (A) **Update your MyWriter class to accept the file path and write to `duplicate_` files:**
+
+**Replace your existing `MyWriter` code with the following content:**
+```java
+package com.example.writer;
+
+import com.example.model.MyRecord;
+import org.springframework.batch.item.ItemWriter;
+import java.io.*;
+import java.util.List;
+
+public class MyWriter implements ItemWriter {
+    private final String outputFilePath;
+    private boolean headerWritten = false;
+
+    // Constructor: accepts the input file path so we can derive write path
+    public MyWriter(String inputFilePath) {
+        File inputFile = new File(inputFilePath);
+        String parent = inputFile.getParent();
+        String fileName = inputFile.getName();
+        String duplicateFileName = "duplicate_" + fileName;
+        this.outputFilePath = (parent != null ? parent + File.separator : "") + duplicateFileName;
+    }
+
+    @Override
+    public void write(List items) throws Exception {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath, true))) {
+            if (!headerWritten) {
+                writer.write("field1,field2,field3"); // CSV header row
+                writer.newLine();
+                headerWritten = true;
+            }
+            for (MyRecord record : items) {
+                writer.write(record.getField1() + "," + record.getField2() + "," + record.getField3());
+                writer.newLine();
+            }
+        }
+    }
+}
+```
+
+***
+
+### **Summary Table**
+
+| File                | What to do                                                                                         |
+|---------------------|---------------------------------------------------------------------------------------------------|
+| **BatchConfig.java**| 1. **Add** new bean from (A).2. **Update** `workerStep` method as in (B)                      |
+| **MyWriter.java**   | **Replace** code with updated definition above                                                    |
+
+***
+
+**After these changes, each partition's writer automatically writes to `duplicate_{originalname}` in the original directory, with the header only once and all chunks appended.**
+
+If you get any error message or need to know the exact location for any snippet, just ask—I'll tell you line-by-line.
