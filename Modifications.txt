@@ -184,3 +184,20 @@ public class MyWriter implements ItemWriter {
 **After these changes, each partition's writer automatically writes to `duplicate_{originalname}` in the original directory, with the header only once and all chunks appended.**
 
 If you get any error message or need to know the exact location for any snippet, just ask—I'll tell you line-by-line.
+
+
+******************************************************
+
+
+<dependencies>
+    <!-- Exclude Logback and use Log4j2 instead -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+        <exclusions>
+            <exclusion>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-logging</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
