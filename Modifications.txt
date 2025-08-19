@@ -1,224 +1,107 @@
-// Highlighted additions below
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-public static void main(String[] args) {
-    // Check: are file paths provided?
-    if (args.length == 0) {
-        System.err.println("Please pass a comma-separated list of input file paths (highest priority first) as the first argument.");
-        System.exit(1);
-    }
-    // Parse file path list from the first argument.
-    String[] filePaths = args[0].split(",");
-    // Pass as a single CSV param when starting the Spring context
-    SpringApplication app = new SpringApplication(BatchApplication.class);
-    app.setDefaultProperties(Collections.singletonMap("job.input.files", String.join(",", filePaths)));
-    app.run(args);
-}
+    <groupId>com.citi.gtfs</groupId>
+    <artifactId>your-artifact-id</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
 
-************************************
+    <properties>
+        <java.version>8</java.version>
+        <spring-boot.version>2.7.18</spring-boot.version>
+    </properties>
 
-@Bean
-public Partitioner filePartitioner(@Value("${job.input.files}") String csvFiles) {
-    // csvFiles is now a comma-separated list of user-supplied file paths in priority order!
-    return new PriorityFilePartitioner(csvFiles);
-}
-
-
-***********************************
-
-
-private final List<String> orderedFilePaths; // keep as a list
-
-// New constructor — copy this in place of the old String dir constructor!
-public PriorityFilePartitioner(String csvFiles) {
-    this.orderedFilePaths = Arrays.asList(csvFiles.split(","));
-}
-
-@Override
-public Map<String, ExecutionContext> partition(int gridSize) {
-    Map<String, ExecutionContext> partitions = new HashMap<>();
-    int partitionNumber = 0;
-    // Preserve user priority order directly
-    for (String filePath : orderedFilePaths) {
-        ExecutionContext ctx = new ExecutionContext();
-        ctx.putString("fileName", filePath);
-        partitions.put("partition" + partitionNumber, ctx);
-        partitionNumber++;
-    }
-    return partitions;
-}
-
-
-
-*********************************
-
-
-
-@Bean
-@StepScope
-public FlatFileItemWriter<MyRecord> itemWriter(@Value("#{stepExecutionContext['fileName']}") String inputFile) {
-    String inputPath = inputFile;
-    File inFile = new File(inputPath);
-    String parentDir = inFile.getParent();
-    String nameWithPrefix = "duplicate_" + inFile.getName();
-    String outputFilePath = (parentDir != null ? parentDir + File.separator : "") + nameWithPrefix;
-
-    FlatFileItemWriter<MyRecord> writer = new FlatFileItemWriter<>();
-    writer.setResource(new FileSystemResource(outputFilePath));
-    writer.setLineAggregator(new DelimitedLineAggregator<MyRecord>() {{
-        setDelimiter(",");
-        setFieldExtractor(item -> new Object[]{item.getField1(), item.getField2(), item.getField3()});
-    }});
-    writer.setHeaderCallback(w -> w.write("field1,field2,field3")); // CSV header (optional, adjust for your scheme)
-    return writer;
-}
-
-
-
-
-************************************************************************
-
-Absolutely—I’ll make this simple, clear, and "copy/paste ready."  
-Below are **exact file names**, **method names**, and **what exactly to add or replace** for enabling per-file output Writer in your Spring Batch adaptive project.
-
-***
-
-## 1. File: `BatchConfig.java`
-
-### (A) **Add this new bean in your configuration class:**
-```java
-// Add to: src/main/java/com/example/config/BatchConfig.java
-
-@Bean
-@StepScope
-public MyWriter myWriter(@Value("#{stepExecutionContext['fileName']}") String inputFilePath) {
-    return new MyWriter(inputFilePath);
-}
-```
-_Place this bean alongside your other `@Bean` definitions (e.g., after your reader or processor beans)._
-
-***
-
-### (B) **Update your `workerStep` method signature and argument to use the new writer:**
-#### **Before:**
-```java
-@Bean
-public Step workerStep(FlatFileItemReader reader, MyProcessor processor, MyWriter writer) {
-    return stepBuilderFactory.get("workerStep")
-            .chunk(...)
-            .reader(reader)
-            .processor(processor)
-            .writer(writer)
-            .build();
-}
-```
-#### **After:**
-```java
-@Bean
-public Step workerStep(FlatFileItemReader reader, MyProcessor processor, MyWriter myWriter) {
-    return stepBuilderFactory.get("workerStep")
-            .chunk(...)
-            .reader(reader)
-            .processor(processor)
-            .writer(myWriter)
-            .build();
-}
-```
-**Notice how the third parameter is now called `myWriter` to match the bean you just added above.**
-
-***
-
-## 2. File: `MyWriter.java`
-
-### (A) **Update your MyWriter class to accept the file path and write to `duplicate_` files:**
-
-**Replace your existing `MyWriter` code with the following content:**
-```java
-package com.example.writer;
-
-import com.example.model.MyRecord;
-import org.springframework.batch.item.ItemWriter;
-import java.io.*;
-import java.util.List;
-
-public class MyWriter implements ItemWriter {
-    private final String outputFilePath;
-    private boolean headerWritten = false;
-
-    // Constructor: accepts the input file path so we can derive write path
-    public MyWriter(String inputFilePath) {
-        File inputFile = new File(inputFilePath);
-        String parent = inputFile.getParent();
-        String fileName = inputFile.getName();
-        String duplicateFileName = "duplicate_" + fileName;
-        this.outputFilePath = (parent != null ? parent + File.separator : "") + duplicateFileName;
-    }
-
-    @Override
-    public void write(List items) throws Exception {
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilePath, true))) {
-            if (!headerWritten) {
-                writer.write("field1,field2,field3"); // CSV header row
-                writer.newLine();
-                headerWritten = true;
-            }
-            for (MyRecord record : items) {
-                writer.write(record.getField1() + "," + record.getField2() + "," + record.getField3());
-                writer.newLine();
-            }
-        }
-    }
-}
-```
-
-***
-
-### **Summary Table**
-
-| File                | What to do                                                                                         |
-|---------------------|---------------------------------------------------------------------------------------------------|
-| **BatchConfig.java**| 1. **Add** new bean from (A).2. **Update** `workerStep` method as in (B)                      |
-| **MyWriter.java**   | **Replace** code with updated definition above                                                    |
-
-***
-
-**After these changes, each partition's writer automatically writes to `duplicate_{originalname}` in the original directory, with the header only once and all chunks appended.**
-
-If you get any error message or need to know the exact location for any snippet, just ask—I'll tell you line-by-line.
-
-
-******************************************************
-
-
-<dependencies>
-    <!-- Exclude Logback and use Log4j2 instead -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter</artifactId>
-        <exclusions>
-            <exclusion>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
                 <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-logging</artifactId>
-            </exclusion>
-        </exclusions>
-    </dependency>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
+    <dependencies>
+        <!-- Compile-only dependency (local jar) -->
+        <dependency>
+            <groupId>local.lib</groupId>
+            <artifactId>javapasswordsdk</artifactId>
+            <version>12.6</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/javapasswordsdk-v12.6.jar</systemPath>
+        </dependency>
 
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>REPLACE_WITH_VERSION</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.4.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-quartz</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.oracle.database.jdbc</groupId>
+            <artifactId>ojdbc8</artifactId>
+            <version>19.19.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
 
-*****************************************************
-
-
-<?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="INFO">
-  <Appenders>
-    <Console name="LogToConsole" target="SYSTEM_OUT">
-      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
-    </Console>
-  </Appenders>
-  <Loggers>
-    <Root level="info">
-      <AppenderRef ref="LogToConsole"/>
-    </Root>
-  </Loggers>
-</Configuration>
-
-
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
