@@ -1,32 +1,75 @@
-package com.citi.gfts.erecon.config;
-
-import org.springframework.context.ApplicationListener;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.event.ContextRefreshedEvent;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.MutablePropertySources;
-import org.springframework.core.env.PropertySource;
+import org.springframework.boot.jdbc.DataSourceBuilder;
+
+import javax.sql.DataSource;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Properties;
+
+// Import CyberArk SDK classes per your dependency
+// import com.cyberark.PSDKPasswordRequest;
+// import com.cyberark.PSDKPassword;
+// import com.cyberark.javaPasswordSDK.PasswordSDK;
 
 @Configuration
-public class VaultPropertySourceRegistrar implements ApplicationListener<ContextRefreshedEvent> {
+public class DataSourceConfig {
 
-    @Override
-    public void onApplicationEvent(ContextRefreshedEvent event) {
-        ConfigurableEnvironment env = (ConfigurableEnvironment) event.getApplicationContext().getEnvironment();
-        MutablePropertySources sources = env.getPropertySources();
-
-        PropertySource<?> delegateSource = null;
-        for (PropertySource<?> ps : sources) {
-            if (ps.getName().contains("applicationConfig: [classpath:/application.properties]")) {
-                delegateSource = ps;
-                break;
-            }
-        }
-        if (delegateSource == null) {
-            throw new IllegalStateException("applicationConfig: [classpath:/application.properties] property source not found!");
+    @Bean
+    public DataSource batchDataSource() throws Exception {
+        // 1. Load properties from file
+        Properties props = new Properties();
+        try (InputStream input = new FileInputStream("db-connection.properties")) {
+            props.load(input);
         }
 
-        System.out.println("Delegate property source for VaultPropertySource: " + delegateSource.getName());
-        sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
+        // 2. Extract DB parameters
+        String server      = props.getProperty("eRecon_Server");
+        String port        = props.getProperty("eRecon_Port");
+        String serviceName = props.getProperty("eRecon_ServiceName");
+        String schema      = props.getProperty("eRecon_Schema"); // use if needed for schema
+        String addParams   = props.getProperty("eRecon_AdditionalParams");
+
+        // 3. Extract CyberArk parameters
+        String carkAppID  = props.getProperty("eRecon_CARKAppID");
+        String carkSafe   = props.getProperty("eRecon_CARKSafe");
+        String carkObject = props.getProperty("eRecon_CARKObject");
+        String dbEnv      = props.getProperty("eRecon_Env");
+
+        // 4. Fetch credentials from CyberArk
+        // Adjust for your actual SDK and available classes
+        PSDKPasswordRequest passRequest = new PSDKPasswordRequest();
+        passRequest.setAppID(carkAppID);
+        passRequest.setSafe(carkSafe);
+        passRequest.setFolder("Root");
+        passRequest.setObject(carkObject);
+        passRequest.setReason(dbEnv);
+
+        PSDKPassword password = javaPasswordSDK.PasswordSDK.getPassword(passRequest);
+
+        String dbUsername = password.getUserName();
+        String dbPassword = password.getContent();
+
+        // 5. Dynamically build JDBC URL
+        StringBuilder jdbcUrlBuilder = new StringBuilder();
+        jdbcUrlBuilder.append("jdbc:oracle:thin:@//")
+                .append(server)
+                .append(":")
+                .append(port)
+                .append("/")
+                .append(serviceName);
+
+        if (addParams != null && !addParams.trim().isEmpty()) {
+            jdbcUrlBuilder.append("?").append(addParams);
+        }
+
+        String jdbcUrl = jdbcUrlBuilder.toString();
+
+        // 6. Build and return the DataSource
+        return DataSourceBuilder.create()
+                .url(jdbcUrl)
+                .username(dbUsername)
+                .password(dbPassword)
+                .build();
     }
 }
