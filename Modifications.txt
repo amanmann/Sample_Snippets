@@ -6,3 +6,25 @@ for (PropertySource<?> ps : env.getPropertySources()) {
         }
     }
 }
+
+
+********************************
+
+
+@PostConstruct
+public void registerVaultPropertySource() {
+    ConfigurableEnvironment env =
+        (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
+
+    MutablePropertySources sources = env.getPropertySources();
+
+    // USE THIS EXACT NAME to get your application.properties
+    PropertySource<?> delegateSource = sources.get("applicationConfig: [classpath:/application.properties]");
+
+    if (delegateSource == null) {
+        throw new IllegalStateException("applicationConfig: [classpath:/application.properties] property source not found!");
+    }
+
+    System.out.println("Delegate property source for VaultPropertySource: " + delegateSource.getName());
+    sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
+}
