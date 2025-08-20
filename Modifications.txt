@@ -1,23 +1,20 @@
 package com.citi.gfts.erecon.config;
 
-import javax.annotation.PostConstruct;
-
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
 
 @Configuration
-public class VaultPropertySourceRegistrar {
+public class VaultPropertySourceRegistrar implements ApplicationListener<ContextRefreshedEvent> {
 
-    @PostConstruct
-    public void registerVaultPropertySource() {
-        ConfigurableEnvironment env =
-            (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
-
+    @Override
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        ConfigurableEnvironment env = (ConfigurableEnvironment) event.getApplicationContext().getEnvironment();
         MutablePropertySources sources = env.getPropertySources();
 
-        // **FIND THE CORRECT PROPERTY SOURCE**
         PropertySource<?> delegateSource = null;
         for (PropertySource<?> ps : sources) {
             if (ps.getName().contains("applicationConfig: [classpath:/application.properties]")) {
@@ -30,7 +27,6 @@ public class VaultPropertySourceRegistrar {
         }
 
         System.out.println("Delegate property source for VaultPropertySource: " + delegateSource.getName());
-
         sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
     }
 }
