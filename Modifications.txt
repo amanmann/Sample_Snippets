@@ -1,107 +1,46 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
-                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+package com.citi.gfts.erecon.config;
 
-    <groupId>com.citi.gtfs</groupId>
-    <artifactId>your-artifact-id</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationContextAware;
+import org.springframework.stereotype.Component;
 
-    <properties>
-        <java.version>8</java.version>
-        <spring-boot.version>2.7.18</spring-boot.version>
-    </properties>
+@Component
+public class ApplicationContextProvider implements ApplicationContextAware {
+    private static ApplicationContext context;
 
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
+    @Override
+    public void setApplicationContext(ApplicationContext ctx) {
+        context = ctx;
+    }
 
-    <dependencies>
-        <!-- Compile-only dependency (local jar) -->
-        <dependency>
-            <groupId>local.lib</groupId>
-            <artifactId>javapasswordsdk</artifactId>
-            <version>12.6</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/lib/javapasswordsdk-v12.6.jar</systemPath>
-        </dependency>
+    public static ApplicationContext getApplicationContext() {
+        return context;
+    }
+}
 
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>REPLACE_WITH_VERSION</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-csv</artifactId>
-            <version>1.14.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.poi</groupId>
-            <artifactId>poi-ooxml</artifactId>
-            <version>5.4.1</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-            <version>${spring-boot.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jdbc</artifactId>
-            <version>${spring-boot.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-quartz</artifactId>
-            <version>${spring-boot.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc8</artifactId>
-            <version>19.19.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <version>${spring-boot.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <version>${spring-boot.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-        </dependency>
-    </dependencies>
 
-    <build>
-        <plugins>
-            <!-- Spring Boot Maven Plugin -->
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <version>${spring-boot.version}</version>
-            </plugin>
-        </plugins>
-    </build>
-</project>
+
+********************************
+
+package com.citi.gfts.erecon.config;
+
+import javax.annotation.PostConstruct;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MutablePropertySources;
+
+@Configuration
+public class VaultPropertySourceRegistrar {
+
+    @PostConstruct
+    public void registerVaultPropertySource() {
+        ConfigurableEnvironment env = 
+          (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
+
+        MutablePropertySources sources = env.getPropertySources();
+
+        // Insert your VaultPropertySource at the front so it takes precedence
+        sources.addFirst(new VaultPropertySource("vaultPropertySource", env.getPropertySources().get("applicationConfig: [classpath:/application.properties]")));
+    }
+}
