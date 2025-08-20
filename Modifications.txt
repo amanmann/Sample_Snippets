@@ -1,36 +1,8 @@
-package com.citi.gfts.erecon.config;
-
-import javax.annotation.PostConstruct;
-
-import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.EnumerablePropertySource;
-import org.springframework.core.env.MutablePropertySources;
-import org.springframework.core.env.PropertySource;
-
-@Configuration
-public class VaultPropertySourceRegistrar {
-
-    @PostConstruct
-    public void registerVaultPropertySource() {
-        ConfigurableEnvironment env = 
-            (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
-
-        MutablePropertySources sources = env.getPropertySources();
-        PropertySource<?> delegateSource = null;
-
-        // Find the first suitable delegate source
-        for (PropertySource<?> ps : sources) {
-            if (!(ps instanceof VaultPropertySource) && ps instanceof EnumerablePropertySource) {
-                delegateSource = ps;
-                break;
-            }
+for (PropertySource<?> ps : env.getPropertySources()) {
+    System.out.println("Source: " + ps.getName());
+    if (ps instanceof EnumerablePropertySource) {
+        for (String propName : ((EnumerablePropertySource<?>) ps).getPropertyNames()) {
+            System.out.println(" - " + propName + " = " + ps.getProperty(propName));
         }
-
-        if (delegateSource == null) {
-            throw new IllegalStateException("No suitable PropertySource found to delegate to VaultPropertySource!");
-        }
-
-        sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
     }
 }
