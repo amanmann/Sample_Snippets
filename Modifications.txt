@@ -1,34 +1,12 @@
 package com.citi.gfts.erecon.config;
 
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.ApplicationContextAware;
-import org.springframework.stereotype.Component;
-
-@Component
-public class ApplicationContextProvider implements ApplicationContextAware {
-    private static ApplicationContext context;
-
-    @Override
-    public void setApplicationContext(ApplicationContext ctx) {
-        context = ctx;
-    }
-
-    public static ApplicationContext getApplicationContext() {
-        return context;
-    }
-}
-
-
-
-********************************
-
-package com.citi.gfts.erecon.config;
-
 import javax.annotation.PostConstruct;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.PropertySource;
 
 @Configuration
 public class VaultPropertySourceRegistrar {
@@ -36,11 +14,23 @@ public class VaultPropertySourceRegistrar {
     @PostConstruct
     public void registerVaultPropertySource() {
         ConfigurableEnvironment env = 
-          (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
+            (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
 
         MutablePropertySources sources = env.getPropertySources();
+        PropertySource<?> delegateSource = null;
 
-        // Insert your VaultPropertySource at the front so it takes precedence
-        sources.addFirst(new VaultPropertySource("vaultPropertySource", env.getPropertySources().get("applicationConfig: [classpath:/application.properties]")));
+        // Find the first suitable delegate source
+        for (PropertySource<?> ps : sources) {
+            if (!(ps instanceof VaultPropertySource) && ps instanceof EnumerablePropertySource) {
+                delegateSource = ps;
+                break;
+            }
+        }
+
+        if (delegateSource == null) {
+            throw new IllegalStateException("No suitable PropertySource found to delegate to VaultPropertySource!");
+        }
+
+        sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
     }
 }
