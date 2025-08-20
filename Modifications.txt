@@ -10,21 +10,63 @@ for (PropertySource<?> ps : env.getPropertySources()) {
 
 ********************************
 
+package com.citi.gfts.erecon.config;
 
-@PostConstruct
-public void registerVaultPropertySource() {
-    ConfigurableEnvironment env =
-        (ConfigurableEnvironment) ApplicationContextProvider.getApplicationContext().getEnvironment();
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.PropertySource;
 
-    MutablePropertySources sources = env.getPropertySources();
+public class VaultEnvironmentPropertySource extends PropertySource<Environment> {
 
-    // USE THIS EXACT NAME to get your application.properties
-    PropertySource<?> delegateSource = sources.get("applicationConfig: [classpath:/application.properties]");
-
-    if (delegateSource == null) {
-        throw new IllegalStateException("applicationConfig: [classpath:/application.properties] property source not found!");
+    public VaultEnvironmentPropertySource(String name, Environment env) {
+        super(name, env);
     }
 
-    System.out.println("Delegate property source for VaultPropertySource: " + delegateSource.getName());
-    sources.addFirst(new VaultPropertySource("vaultPropertySource", delegateSource));
+    @Override
+    public Object getProperty(String name) {
+        Object value = this.source.getProperty(name);
+        if (value instanceof String) {
+            String stringValue = (String) value;
+            if (stringValue.startsWith("ARC(")) {
+                try {
+                    // Insert your CyberArk lookup logic here!
+                    return getPasswordFromCyberArk(
+                        stringValue.substring(4, stringValue.length() - 1));
+                } catch (Exception e) {
+                    // Optional: log error
+                    return null;
+                }
+            }
+        }
+        return value;
+    }
+    // Implement or inject your getPasswordFromCyberArk here as before
+}
+
+
+
+*********************************************
+
+package com.citi.gfts.erecon.config;
+
+import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.Environment;
+
+@Configuration
+public class VaultPropertySourceRegistrar {
+
+    @Autowired
+    private Environment env;
+
+    @PostConstruct
+    public void registerVaultPropertySource() {
+        ConfigurableEnvironment configEnv = (ConfigurableEnvironment) env;
+        MutablePropertySources sources = configEnv.getPropertySources();
+
+        sources.addFirst(new VaultEnvironmentPropertySource("vaultEnvPropertySource", env));
+        System.out.println("VaultEnvironmentPropertySource registered as highest priority.");
+    }
 }
