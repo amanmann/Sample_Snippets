@@ -1,75 +1,21 @@
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.jdbc.DataSourceBuilder;
+import java.util.*;
 
-import javax.sql.DataSource;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
+public class MapFromLists {
+    public static Map<String, String> mapNamesToValues(List<String> names, String pipeSeparated) {
+        String[] values = pipeSeparated.split("\\|");
+        Map<String, String> map = new HashMap<>();
 
-// Import CyberArk SDK classes per your dependency
-// import com.cyberark.PSDKPasswordRequest;
-// import com.cyberark.PSDKPassword;
-// import com.cyberark.javaPasswordSDK.PasswordSDK;
-
-@Configuration
-public class DataSourceConfig {
-
-    @Bean
-    public DataSource batchDataSource() throws Exception {
-        // 1. Load properties from file
-        Properties props = new Properties();
-        try (InputStream input = new FileInputStream("db-connection.properties")) {
-            props.load(input);
+        for (int i = 0; i < names.size() && i < values.length; i++) {
+            map.put(names.get(i), values[i]);
         }
+        return map;
+    }
 
-        // 2. Extract DB parameters
-        String server      = props.getProperty("eRecon_Server");
-        String port        = props.getProperty("eRecon_Port");
-        String serviceName = props.getProperty("eRecon_ServiceName");
-        String schema      = props.getProperty("eRecon_Schema"); // use if needed for schema
-        String addParams   = props.getProperty("eRecon_AdditionalParams");
+    public static void main(String[] args) {
+        List<String> names = Arrays.asList("id", "firstName", "lastName");
+        String data = "1|John|Doe";
+        Map<String, String> result = mapNamesToValues(names, data);
 
-        // 3. Extract CyberArk parameters
-        String carkAppID  = props.getProperty("eRecon_CARKAppID");
-        String carkSafe   = props.getProperty("eRecon_CARKSafe");
-        String carkObject = props.getProperty("eRecon_CARKObject");
-        String dbEnv      = props.getProperty("eRecon_Env");
-
-        // 4. Fetch credentials from CyberArk
-        // Adjust for your actual SDK and available classes
-        PSDKPasswordRequest passRequest = new PSDKPasswordRequest();
-        passRequest.setAppID(carkAppID);
-        passRequest.setSafe(carkSafe);
-        passRequest.setFolder("Root");
-        passRequest.setObject(carkObject);
-        passRequest.setReason(dbEnv);
-
-        PSDKPassword password = javaPasswordSDK.PasswordSDK.getPassword(passRequest);
-
-        String dbUsername = password.getUserName();
-        String dbPassword = password.getContent();
-
-        // 5. Dynamically build JDBC URL
-        StringBuilder jdbcUrlBuilder = new StringBuilder();
-        jdbcUrlBuilder.append("jdbc:oracle:thin:@//")
-                .append(server)
-                .append(":")
-                .append(port)
-                .append("/")
-                .append(serviceName);
-
-        if (addParams != null && !addParams.trim().isEmpty()) {
-            jdbcUrlBuilder.append("?").append(addParams);
-        }
-
-        String jdbcUrl = jdbcUrlBuilder.toString();
-
-        // 6. Build and return the DataSource
-        return DataSourceBuilder.create()
-                .url(jdbcUrl)
-                .username(dbUsername)
-                .password(dbPassword)
-                .build();
+        System.out.println(result); // {id=1, firstName=John, lastName=Doe}
     }
 }
