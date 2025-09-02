@@ -1,21 +1,25 @@
-import java.util.*;
-
-public class MapFromLists {
-    public static Map<String, String> mapNamesToValues(List<String> names, String pipeSeparated) {
-        String[] values = pipeSeparated.split("\\|");
-        Map<String, String> map = new HashMap<>();
-
-        for (int i = 0; i < names.size() && i < values.length; i++) {
-            map.put(names.get(i), values[i]);
-        }
-        return map;
-    }
-
-    public static void main(String[] args) {
-        List<String> names = Arrays.asList("id", "firstName", "lastName");
-        String data = "1|John|Doe";
-        Map<String, String> result = mapNamesToValues(names, data);
-
-        System.out.println(result); // {id=1, firstName=John, lastName=Doe}
-    }
-}
+<dependency>
+    <groupId>com.sun.mail</groupId>
+    <artifactId>jakarta.mail</artifactId>
+    <version>1.6.8</version>
+</dependency>
+<dependency>
+    <groupId>org.apache.commons</groupId>
+    <artifactId>commons-lang3</artifactId>
+    <version>3.18.0</version>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-mail</artifactId>
+    <version>2.7.18</version>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-freemarker</artifactId>
+    <version>2.7.18</version>
+</dependency>
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis-spring-boot-starter</artifactId>
+    <version>2.3.2</version>
+</dependency>
