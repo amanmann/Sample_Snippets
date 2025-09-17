@@ -1,25 +1,83 @@
-<dependency>
-    <groupId>com.sun.mail</groupId>
-    <artifactId>jakarta.mail</artifactId>
-    <version>1.6.8</version>
-</dependency>
-<dependency>
-    <groupId>org.apache.commons</groupId>
-    <artifactId>commons-lang3</artifactId>
-    <version>3.18.0</version>
-</dependency>
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-mail</artifactId>
-    <version>2.7.18</version>
-</dependency>
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-freemarker</artifactId>
-    <version>2.7.18</version>
-</dependency>
-<dependency>
-    <groupId>org.mybatis.spring.boot</groupId>
-    <artifactId>mybatis-spring-boot-starter</artifactId>
-    <version>2.3.2</version>
-</dependency>
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+
+import java.io.FileReader;
+import java.io.Reader;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
+public class RCAttestationUploadByHeader {
+
+    static class RcRecord {
+        String scheduleId;
+        String fullKey;
+        String agreedFlag;
+        LocalDate createDt;
+
+        RcRecord(String scheduleId, String fullKey, String agreedFlag, LocalDate createDt) {
+            this.scheduleId = scheduleId;
+            this.fullKey = fullKey;
+            this.agreedFlag = agreedFlag;
+            this.createDt = createDt;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        String filePath = "input.csv";
+        String scheduleId = "12345";
+        LocalDate batchDate = LocalDate.now();
+
+        Reader reader = new FileReader(filePath);
+        CSVParser parser = CSVFormat.DEFAULT
+            .withFirstRecordAsHeader()
+            .withDelimiter('|') // Match your file’s delimiter
+            .parse(reader);
+
+        List<RcRecord> validRecords = new ArrayList<>();
+        for (CSVRecord csvRecord : parser) {
+            String fullKey = csvRecord.get("FULLKEY");
+            if (fullKey != null && !fullKey.trim().isEmpty()) {
+                String checkerStatus = csvRecord.isMapped("RC_CHECKER_STATUS") ? csvRecord.get("RC_CHECKER_STATUS") : "";
+                String agreedFlag = checkerStatus != null ? checkerStatus.toUpperCase() : "";
+                validRecords.add(new RcRecord(scheduleId, fullKey, agreedFlag, batchDate));
+            }
+        }
+        // Pass validRecords to JdbcTemplate.batchUpdate() as before
+    }
+}
+
+
+
+*****************************************************************
+
+        // 3. Batch Insert using JdbcTemplate
+        JdbcTemplate jdbcTemplate = createJdbcTemplate(); // Provided below
+
+        String sql = "INSERT INTO RCN_UPLDETAILS (SCHEDULEID, FULLKEY, AGREED_FLAG, CREATE_DT) VALUES (?, ?, ?, ?)";
+        jdbcTemplate.batchUpdate(
+            sql,
+            validRecords,
+            500, // batch size, tune as needed
+            (ps, record) -> {
+                ps.setString(1, record.scheduleId);
+                ps.setString(2, record.fullKey);
+                ps.setString(3, record.agreedFlag);
+                ps.setDate(4, Date.valueOf(record.createDt));
+            }
+        );
+
+        System.out.println("Batch insert complete. Total valid records inserted: " + validRecords.size());
+    }
+
+    // Create or autowire JdbcTemplate as per your Spring context
+    public static JdbcTemplate createJdbcTemplate() {
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName("oracle.jdbc.driver.OracleDriver"); // Ensure the driver is on classpath
+        ds.setUrl("jdbc:oracle:thin:@//host:port/service");
+        ds.setUsername("USERNAME");
+        ds.setPassword("PASSWORD");
+        return new JdbcTemplate(ds);
+    }
+}
