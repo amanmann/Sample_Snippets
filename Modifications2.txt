@@ -1,0 +1,57 @@
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+
+import java.io.FileReader;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+public class CsvUtil {
+    public static List<Map<String, String>> parseCsvToMap(String filePath, char delimiter) throws Exception {
+        List<Map<String, String>> records = new ArrayList<>();
+        try (Reader reader = new FileReader(filePath)) {
+            CSVParser parser = CSVFormat.DEFAULT
+                .withFirstRecordAsHeader()
+                .withDelimiter(delimiter)
+                .parse(reader);
+
+            for (CSVRecord csvRecord : parser) {
+                records.add(csvRecord.toMap());
+            }
+        }
+        return records;
+    }
+}
+
+
+***************************************************************
+
+public void processRCAttestationUpload(String filePath, String scheduleId) throws Exception {
+    List<Map<String, String>> allRecords = CsvUtil.parseCsvToMap(filePath, '|');
+    List<Map<String, Object>> validRecords = new ArrayList<>();
+
+    // Choose/filter, transform as needed
+    for (Map<String, String> record : allRecords) {
+        String fullKey = record.get("FULLKEY");
+        if (fullKey != null && !fullKey.trim().isEmpty()) {
+            Map<String, Object> mappedRecord = Map.of(
+                "SCHEDULEID", scheduleId,
+                "FULLKEY", fullKey,
+                "AGREED_FLAG", record.getOrDefault("RC_CHECKER_STATUS", "").toUpperCase(),
+                "CREATE_DT", java.sql.Date.valueOf(java.time.LocalDate.now())
+            );
+            validRecords.add(mappedRecord);
+        }
+    }
+
+    // Now use batch DAO, mapping each record to its SQL parameters
+    String sql = "INSERT INTO RCN_UPLDETAILS (SCHEDULEID, FULLKEY, AGREED_FLAG, CREATE_DT) VALUES (?, ?, ?, ?)";
+    batchDAO.batchInsert(sql, validRecords, (ps, rec) -> {
+        ps.setString(1, (String) rec.get("SCHEDULEID"));
+        ps.setString(2, (String) rec.get("FULLKEY"));
+        ps.setString(3, (String) rec.get("AGREED_FLAG"));
+        ps.setDate(4, (java.sql.Date) rec.get("CREATE_DT"));
+    });
+}
