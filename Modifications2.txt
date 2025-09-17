@@ -68,30 +68,26 @@ import java.util.List;
 
 @Repository
 public class GenericBatchDAOImpl implements GenericBatchDAO {
-    
+
     private final JdbcTemplate jdbcTemplate;
-    
+
     public GenericBatchDAOImpl(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
-    
+
     @Override
-    public <T> int[] batchInsert(String sql, List<T> entities, 
-                                ParameterSetter<T> parameterSetter) {
-        return batchInsert(sql, entities, parameterSetter, entities.size());
-    }
-    
-    @Override
-    public <T> int[] batchInsert(String sql, List<T> entities, 
-                                ParameterSetter<T> parameterSetter, int batchSize) {
-        if (entities.isEmpty()) {
+    public <T> int[] batchInsert(
+            String sql,
+            List<T> records,
+            ParameterSetter<T> parameterSetter,
+            int batchSize
+    ) {
+        if (records == null || records.isEmpty()) {
             return new int[0];
         }
-        
-        // Use Spring's batching with custom batch size
-        int[][] results = jdbcTemplate.batchUpdate(
+        return jdbcTemplate.batchUpdate(
             sql,
-            entities,
+            records,
             batchSize,
             new ParameterizedPreparedStatementSetter<T>() {
                 @Override
@@ -100,23 +96,5 @@ public class GenericBatchDAOImpl implements GenericBatchDAO {
                 }
             }
         );
-        
-        // Flatten the 2D array to 1D for simpler return type
-        return flattenResults(results);
-    }
-    
-    private int[] flattenResults(int[][] results) {
-        int totalLength = 0;
-        for (int[] batch : results) {
-            totalLength += batch.length;
-        }
-        
-        int[] flattened = new int[totalLength];
-        int index = 0;
-        for (int[] batch : results) {
-            System.arraycopy(batch, 0, flattened, index, batch.length);
-            index += batch.length;
-        }
-        return flattened;
     }
 }
