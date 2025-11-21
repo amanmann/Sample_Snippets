@@ -69,3 +69,23 @@ HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
 ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
 
 System.out.println(response.getBody());
+
+
+********************************************
+
+<!-- Spring Boot Starter Web -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<!-- Apache HttpClient for SSL support -->
+<dependency>
+    <groupId>org.apache.httpcomponents</groupId>
+    <artifactId>httpclient</artifactId>
+    <version>4.5.14</version>
+</dependency>
+
+
+
+implementation 'org.springframework.boot:spring-boot-starter-web'
+implementation 'org.apache.httpcomponents:httpclient:4.5.14'
