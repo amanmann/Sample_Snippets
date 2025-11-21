@@ -1,100 +1,59 @@
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVParser;
-import org.apache.commons.csv.CSVRecord;
+# application.properties
 
-import java.io.FileReader;
-import java.io.Reader;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-public class CsvUtil {
-    public static List<Map<String, String>> parseCsvToMap(String filePath, char delimiter) throws Exception {
-        List<Map<String, String>> records = new ArrayList<>();
-        try (Reader reader = new FileReader(filePath)) {
-            CSVParser parser = CSVFormat.DEFAULT
-                .withFirstRecordAsHeader()
-                .withDelimiter(delimiter)
-                .parse(reader);
-
-            for (CSVRecord csvRecord : parser) {
-                records.add(csvRecord.toMap());
-            }
-        }
-        return records;
-    }
-}
-
-
-***************************************************************
-
-public void processRCAttestationUpload(String filePath, String scheduleId) throws Exception {
-    List<Map<String, String>> allRecords = CsvUtil.parseCsvToMap(filePath, '|');
-    List<Map<String, Object>> validRecords = new ArrayList<>();
-
-    // Choose/filter, transform as needed
-    for (Map<String, String> record : allRecords) {
-        String fullKey = record.get("FULLKEY");
-        if (fullKey != null && !fullKey.trim().isEmpty()) {
-            Map<String, Object> mappedRecord = Map.of(
-                "SCHEDULEID", scheduleId,
-                "FULLKEY", fullKey,
-                "AGREED_FLAG", record.getOrDefault("RC_CHECKER_STATUS", "").toUpperCase(),
-                "CREATE_DT", java.sql.Date.valueOf(java.time.LocalDate.now())
-            );
-            validRecords.add(mappedRecord);
-        }
-    }
-
-    // Now use batch DAO, mapping each record to its SQL parameters
-    String sql = "INSERT INTO RCN_UPLDETAILS (SCHEDULEID, FULLKEY, AGREED_FLAG, CREATE_DT) VALUES (?, ?, ?, ?)";
-    batchDAO.batchInsert(sql, validRecords, (ps, rec) -> {
-        ps.setString(1, (String) rec.get("SCHEDULEID"));
-        ps.setString(2, (String) rec.get("FULLKEY"));
-        ps.setString(3, (String) rec.get("AGREED_FLAG"));
-        ps.setDate(4, (java.sql.Date) rec.get("CREATE_DT"));
-    });
-}
+server.ssl.trust-store=classpath:/path/to/truststore.jks
+server.ssl.trust-store-password=yourTrustStorePassword
+server.ssl.trust-store-type=JKS
 
 **************************************
 
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.ParameterizedPreparedStatementSetter;
-import org.springframework.stereotype.Repository;
+@Configuration
+public class SslConfiguration {
 
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.util.List;
+    @Value("${http.client.ssl.trust-store}")
+    private Resource trustStore;
 
-@Repository
-public class GenericBatchDAOImpl implements GenericBatchDAO {
+    @Value("${http.client.ssl.trust-store-password}")
+    private String trustStorePassword;
 
-    private final JdbcTemplate jdbcTemplate;
-
-    public GenericBatchDAOImpl(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
-    }
-
-    @Override
-    public <T> int[] batchInsert(
-            String sql,
-            List<T> records,
-            ParameterSetter<T> parameterSetter,
-            int batchSize
-    ) {
-        if (records == null || records.isEmpty()) {
-            return new int[0];
-        }
-        return jdbcTemplate.batchUpdate(
-            sql,
-            records,
-            batchSize,
-            new ParameterizedPreparedStatementSetter<T>() {
-                @Override
-                public void setValues(PreparedStatement ps, T entity) throws SQLException {
-                    parameterSetter.setParameters(ps, entity);
-                }
-            }
-        );
+    @Bean
+    public RestTemplate restTemplate() throws Exception {
+        SSLContext sslContext = SSLContexts.custom()
+            .loadTrustMaterial(
+                    trustStore.getURL(),
+                    trustStorePassword.toCharArray())
+            .build();
+        SSLConnectionSocketFactory socketFactory =
+            new SSLConnectionSocketFactory(sslContext);
+        HttpClient httpClient = HttpClients.custom()
+            .setSSLSocketFactory(socketFactory)
+            .build();
+        HttpComponentsClientHttpRequestFactory factory =
+            new HttpComponentsClientHttpRequestFactory(httpClient);
+        return new RestTemplate(factory);
     }
 }
+
+
+
+
+*******************************************
+
+RestTemplate restTemplate = new RestTemplate();
+
+String url = "https://your-api-endpoint";
+HttpHeaders headers = new HttpHeaders();
+headers.setContentType(MediaType.APPLICATION_JSON);
+headers.add("userSoeld", "ERECON");
+headers.add("fidAuth", contextAuthStringEnc); // from your context
+
+// Example of a payload map (or use your model object)
+Map<String, Object> payload = new HashMap<>();
+payload.put("key1", "value1");
+payload.put("key2", "value2");
+// Add more as needed
+
+HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+
+ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+System.out.println(response.getBody());
